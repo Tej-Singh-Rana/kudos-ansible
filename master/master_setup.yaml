@@ -1,0 +1,70 @@
+---
+  - name: Installing Kubernetes cluster setup
+    hosts: all
+    remote_user: root
+    vars:
+       packages:
+          - kubeadm
+    tasks:
+      - name: Creating a repository file for Kubernetes
+        file:
+           path: /etc/yum.repos.d/kuber.repo
+           state: touch
+      - name: Adding repository details in Kubernetes repo file.
+        blockinfile:
+             path: /etc/yum.repos.d/kuber.repo
+             block: |
+                [k8s]
+                name=kubernetes
+                baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+                gpgcheck=0    
+      - name: Creating a repository file for docker.
+        file:
+          path: /etc/yum.repos.d/docker.repo
+          state: touch
+      - name: Adding repository details in docker repo file.
+        blockinfile:
+              path: /etc/yum.repos.d/docker.repo
+              block: |
+                 [dock]
+                 name=docker
+                 baseurl=http://mirror.centos.org/centos-7/7/os/x86_64/
+                 gpgcheck=0
+      - name: Installing docker
+        command: amazon-linux-extras install docker  -y
+      - name: Installing kubeadm
+        yum:
+          name: "{{ packages }}"
+          state: latest
+      - name: Start and enable the services.
+        service:
+            name: docker
+            state: started
+            enabled: yes
+      - name: Start and enable the services.
+        service:
+            name: kubelet
+            state: started
+            enabled: yes
+      - name: Initializing kubernetes cluster
+        shell: kubeadm  init --pod-network-cidr=192.168.0.0/16
+        register: output
+
+      - name: debug module
+        debug:
+           var: output.stdout_lines
+           #- name: storing tokens
+        #     local_action: copy content={{ output.stdout }} dest=/opt/tokenfile
+
+      - name: Configuring k8s config file
+        command: |
+            mkdir -p $HOME/.kube
+            cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+            chown $(id -u):$(id -g) $HOME/.kube/config
+      - name: Configuring bash-completion and launched calico-project
+        command: |
+             echo "source <(kubectl completion bash)" /root/.bashrc
+             source /root/.bashrc
+             kubectl apply -f https://docs.projectcalico.org/v3.8/manifests/calico.yaml
+             
+
